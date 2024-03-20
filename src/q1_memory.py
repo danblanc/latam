@@ -1,32 +1,24 @@
 from typing import List, Tuple
 from datetime import datetime
-import polars as pl
+import json
+from collections import defaultdict, Counter
+from time_tracker import track_execution_time
 
+@track_execution_time
 def q1_memory(file_path: str) -> List[Tuple[datetime.date, str]]:
-    df_scan = pl.scan_ndjson(file_path, infer_schema_length=None)
+    user_counts_per_date = defaultdict(Counter)
 
-    df_output = df_scan \
-        .select(
-            [
-                pl.col('date').str.strptime(pl.Datetime).dt.date().alias('datetime'),
-                pl.col('user').struct.field('username').alias('username')
-            ]
-        ) \
-        .group_by(['datetime', 'username']) \
-        .agg(
-            twits_count = pl.count('username')
-        ) \
-        .group_by('datetime') \
-        .agg([
-            pl.col('username').gather(pl.col('twits_count').arg_max()),
-            pl.col('twits_count').gather(pl.col('twits_count').arg_max())
-        ]) \
-        .with_columns(
-            pl.col('username').list.first(),
-            pl.col('twits_count').list.first()
-        ) \
-        .sort('twits_count', descending=True) \
-        .select(['datetime', 'username']) \
-        .head(10)
-    
-    return df_output.collect()
+    with open(file_path, 'r') as f:
+        for line in f:
+            record = json.loads(line)
+            date = datetime.strptime(record['date'], '%Y-%m-%dT%H:%M:%S%z').date()
+            username = record['user']['username']
+            user_counts_per_date[date][username] += 1
+
+    results = []
+    for date, counter in user_counts_per_date.items():
+        most_common_user, count = counter.most_common(1)[0]
+        results.append((date, most_common_user, count))
+
+    top_results = sorted(results, key=lambda x: (-x[2], x[0]))[:10]
+    return [(date, username) for date, username, _ in top_results]
