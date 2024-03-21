@@ -45,7 +45,3 @@ def q1_time(file_path: str, lines_per_chunk = 1000, num_workers = 4) -> List[Tup
 
     top_results = sorted(final_results, key=lambda x: (-x[2], x[0]))[:10]
     return [(date, username) for date, username, _ in top_results]
-
-
-
-
